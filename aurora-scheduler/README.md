@@ -31,7 +31,6 @@ aurora-scheduler/
 │   ├── api/                    # NestJS REST & WebSocket API Gateway
 │   ├── worker/                 # Standalone NestJS Worker Service
 │   └── web/                    # Next.js 14 Dashboard
-├── docker-compose.yml          # Local dev environment
 └── README.md                   # This instruction manual
 ```
 
@@ -42,16 +41,9 @@ aurora-scheduler/
 ### Prerequisites
 - [Node.js](https://nodejs.org/) v20+
 - [pnpm](https://pnpm.io/) v9+
-- [Docker & Docker Compose](https://www.docker.com/)
 
-### Step 1: Start PostgreSQL and Redis
-Spin up the local database and cache services using Docker Compose:
-```bash
-pnpm docker:up
-```
-
-### Step 2: Seed and Run the API and Worker Fleet
-Install dependencies workspace-wide and start the development servers:
+### Setup and Run the API and Worker Fleet
+Ensure you have configured database and cache credentials in the `.env` files of `apps/api` and `apps/worker`, then install dependencies workspace-wide and start the development servers:
 ```bash
 # Install workspace dependencies
 pnpm install

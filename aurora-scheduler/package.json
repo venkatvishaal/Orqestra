@@ -10,9 +10,7 @@
     "dev": "pnpm --parallel -r dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "typescript": "^5.4.5"
