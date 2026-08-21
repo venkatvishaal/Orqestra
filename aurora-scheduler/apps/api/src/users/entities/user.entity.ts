@@ -22,7 +22,7 @@ export class User {
   @Column({ name: 'password_hash' })
   passwordHash: string;
 
-  @Column({ name: 'refresh_token_hash', nullable: true })
+  @Column({ name: 'refresh_token_hash', type: 'varchar', nullable: true })
   refreshTokenHash: string | null;
 
   @ApiProperty()

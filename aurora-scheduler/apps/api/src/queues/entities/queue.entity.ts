@@ -53,7 +53,7 @@ export class Queue {
   rateLimitPerSec: number | null;
 
   @ApiProperty()
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   description: string | null;
 
   @ManyToOne(() => Project, (p) => p.queues, { onDelete: 'CASCADE' })

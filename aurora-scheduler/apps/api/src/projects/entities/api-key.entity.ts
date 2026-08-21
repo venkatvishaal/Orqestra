@@ -19,7 +19,7 @@ export class ApiKey {
   @Column({ name: 'key_hash' })
   keyHash: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   name?: string;
 
   @Column({ default: false, name: 'is_revoked' })

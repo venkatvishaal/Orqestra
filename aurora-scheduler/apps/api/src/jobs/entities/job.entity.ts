@@ -57,11 +57,11 @@ export class Job {
   payload: Record<string, any>;
 
   /** Optional webhook URL to call when executing this job */
-  @Column({ name: 'handler_url', nullable: true })
+  @Column({ name: 'handler_url', type: 'varchar', nullable: true })
   handlerUrl: string | null;
 
   /** For deduplication — unique per queue when set */
-  @Column({ name: 'idempotency_key', nullable: true })
+  @Column({ name: 'idempotency_key', type: 'varchar', nullable: true })
   idempotencyKey: string | null;
 
   /** Higher = executed first within a queue */
@@ -84,15 +84,15 @@ export class Job {
   maxAttempts: number | null;
 
   /** Cron expression (for cron-type jobs) */
-  @Column({ name: 'cron_expression', nullable: true })
+  @Column({ name: 'cron_expression', type: 'varchar', nullable: true })
   cronExpression: string | null;
 
   /** For batch jobs — parent batch reference */
-  @Column({ name: 'batch_id', nullable: true })
+  @Column({ name: 'batch_id', type: 'varchar', nullable: true })
   batchId: string | null;
 
   /** Worker that currently holds this job */
-  @Column({ name: 'worker_id', nullable: true })
+  @Column({ name: 'worker_id', type: 'varchar', nullable: true })
   workerId: string | null;
 
   /** When the job was claimed */

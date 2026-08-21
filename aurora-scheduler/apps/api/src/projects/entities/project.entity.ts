@@ -26,7 +26,7 @@ export class Project {
   @Column({ name: 'org_id' })
   orgId: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   description?: string;
 
   @Column({ default: false, name: 'is_deleted' })
