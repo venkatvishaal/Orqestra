@@ -80,7 +80,7 @@ export class Job {
   attempts: number;
 
   /** Maximum attempts (overrides queue default if set) */
-  @Column({ name: 'max_attempts', nullable: true })
+  @Column({ type: 'int', name: 'max_attempts', nullable: true })
   maxAttempts: number | null;
 
   /** Cron expression (for cron-type jobs) */

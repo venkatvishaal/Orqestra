@@ -27,7 +27,7 @@ export class Worker {
   hostname: string;
 
   @ApiProperty()
-  @Column({ name: 'process_id', nullable: true })
+  @Column({ type: 'int', name: 'process_id', nullable: true })
   processId: number | null;
 
   @ApiProperty({ enum: WorkerStatus })

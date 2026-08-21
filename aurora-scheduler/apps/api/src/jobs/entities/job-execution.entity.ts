@@ -52,7 +52,7 @@ export class JobExecution {
   finishedAt: Date | null;
 
   /** Duration in milliseconds */
-  @Column({ name: 'duration_ms', nullable: true })
+  @Column({ type: 'int', name: 'duration_ms', nullable: true })
   durationMs: number | null;
 
   @CreateDateColumn({ name: 'created_at' })

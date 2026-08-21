@@ -49,7 +49,7 @@ export class Queue {
   isPaused: boolean;
 
   @ApiProperty()
-  @Column({ nullable: true, name: 'rate_limit_per_sec' })
+  @Column({ type: 'int', nullable: true, name: 'rate_limit_per_sec' })
   rateLimitPerSec: number | null;
 
   @ApiProperty()
