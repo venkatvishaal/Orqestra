@@ -106,8 +106,8 @@ export class PollerService implements OnModuleInit, OnModuleDestroy {
           this.activeJobs.set(claimed.job.id, promise);
         }
       }
-    } catch (err) {
-      this.logger.error('Poll error:', err);
+    } catch (err: any) {
+      this.logger.error(`Poll error: ${err?.message || err}`, err?.stack);
     }
 
     this.schedulePoll();
@@ -134,13 +134,15 @@ export class PollerService implements OnModuleInit, OnModuleDestroy {
         if (!rows || !rows.length) return null;
         const job = rows[0];
 
-        const execution = await em.save(JobExecution, {
-          jobId: job.id,
-          workerId: this.workerId,
-          attemptNumber: (job.attempts || 0) + 1,
-          status: ExecutionStatus.RUNNING,
-          startedAt: new Date(),
-        });
+        const execution = await em.save(
+          em.create(JobExecution, {
+            jobId: job.id,
+            workerId: this.workerId,
+            attemptNumber: (job.attempts || 0) + 1,
+            status: ExecutionStatus.RUNNING,
+            startedAt: new Date(),
+          }),
+        );
 
         await em.update(Job, { id: job.id }, { status: JobStatus.RUNNING });
         return { job, execution };
