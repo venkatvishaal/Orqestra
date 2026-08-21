@@ -32,7 +32,7 @@ export class ScheduledJob {
   @Column({ name: 'next_run_at', type: 'timestamptz' })
   nextRunAt: Date;
 
-  @Column({ name: 'last_materialized_job_id', nullable: true })
+  @Column({ name: 'last_materialized_job_id', type: 'varchar', nullable: true })
   lastMaterializedJobId: string | null;
 
   @Column({ name: 'is_active', default: true })

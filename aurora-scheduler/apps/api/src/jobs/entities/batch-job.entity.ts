@@ -39,7 +39,7 @@ export class BatchJob {
   @Column({ type: 'enum', enum: BatchStatus, default: BatchStatus.PENDING })
   status: BatchStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   name: string | null;
 
   @ManyToOne(() => Queue, { onDelete: 'CASCADE' })
