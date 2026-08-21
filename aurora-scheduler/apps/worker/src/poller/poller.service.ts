@@ -132,7 +132,9 @@ export class PollerService implements OnModuleInit, OnModuleDestroy {
         );
 
         if (!rows || !rows.length) return null;
-        const job = rows[0];
+        const job = Array.isArray(rows[0]) ? rows[0][0] : rows[0];
+        if (!job) return null;
+
         const jobId = job.id || job.job_id;
         const insertRes = await em.insert(JobExecution, {
           jobId: jobId,
