@@ -6,8 +6,15 @@ import { LoggerModule } from 'nestjs-pino';
 import { PollerModule } from './poller/poller.module';
 import { HeartbeatModule } from './heartbeat/heartbeat.module';
 
-// Import only the entities this worker needs
+// Import the database entities
+import { User } from '../../api/src/users/entities/user.entity';
+import { Organization } from '../../api/src/organizations/entities/organization.entity';
+import { OrganizationMember } from '../../api/src/organizations/entities/organization-member.entity';
+import { Project } from '../../api/src/projects/entities/project.entity';
+import { ApiKey } from '../../api/src/projects/entities/api-key.entity';
 import { Job } from '../../api/src/jobs/entities/job.entity';
+import { ScheduledJob } from '../../api/src/jobs/entities/scheduled-job.entity';
+import { BatchJob } from '../../api/src/jobs/entities/batch-job.entity';
 import { JobExecution } from '../../api/src/jobs/entities/job-execution.entity';
 import { JobLog } from '../../api/src/jobs/entities/job-log.entity';
 import { Queue } from '../../api/src/queues/entities/queue.entity';
@@ -33,7 +40,23 @@ import { DeadLetterEntry } from '../../api/src/dlq/entities/dead-letter-entry.en
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         url: config.get<string>('DATABASE_URL'),
-        entities: [Job, JobExecution, JobLog, Queue, RetryPolicy, Worker, WorkerHeartbeat, DeadLetterEntry],
+        entities: [
+          User,
+          Organization,
+          OrganizationMember,
+          Project,
+          ApiKey,
+          Job,
+          ScheduledJob,
+          BatchJob,
+          JobExecution,
+          JobLog,
+          Queue,
+          RetryPolicy,
+          Worker,
+          WorkerHeartbeat,
+          DeadLetterEntry,
+        ],
         synchronize: false, // Schema managed by API
         ssl: config.get('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
       }),
