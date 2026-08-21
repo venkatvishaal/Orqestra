@@ -25,7 +25,7 @@ export class ApiKey {
   @Column({ default: false, name: 'is_revoked' })
   isRevoked: boolean;
 
-  @Column({ name: 'last_used_at', nullable: true })
+  @Column({ name: 'last_used_at', type: 'timestamptz', nullable: true })
   lastUsedAt: Date | null;
 
   @ManyToOne(() => Project, (p) => p.apiKeys, { onDelete: 'CASCADE' })
