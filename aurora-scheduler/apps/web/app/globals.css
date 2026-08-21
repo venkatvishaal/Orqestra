@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-mono), "Courier New", monospace;
+
+  /* Aurora color palette */
+  --color-aurora-50: oklch(97% 0.02 220);
+  --color-aurora-100: oklch(93% 0.04 220);
+  --color-aurora-200: oklch(85% 0.08 220);
+  --color-aurora-300: oklch(75% 0.14 220);
+  --color-aurora-400: oklch(65% 0.18 220);
+  --color-aurora-500: oklch(55% 0.22 220);
+  --color-aurora-600: oklch(46% 0.22 220);
+  --color-aurora-700: oklch(37% 0.18 220);
+  --color-aurora-800: oklch(28% 0.12 220);
+  --color-aurora-900: oklch(20% 0.08 220);
+  --color-aurora-950: oklch(13% 0.05 220);
+
+  /* Teal accent */
+  --color-teal-400: oklch(72% 0.2 185);
+  --color-teal-500: oklch(62% 0.22 185);
+
+  /* Status colors */
+  --color-success: oklch(68% 0.19 145);
+  --color-warning: oklch(74% 0.2 70);
+  --color-danger: oklch(62% 0.22 25);
+  --color-info: oklch(68% 0.18 250);
+
+  /* Surface tokens */
+  --color-surface-1: oklch(12% 0.02 255);
+  --color-surface-2: oklch(16% 0.025 255);
+  --color-surface-3: oklch(20% 0.03 255);
+  --color-surface-border: oklch(28% 0.04 255);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-surface-1);
+  color: oklch(92% 0.01 255);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-surface-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(38% 0.05 255); }
+
+/* Glass card */
+.glass-card {
+  background: oklch(16% 0.025 255 / 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-surface-border);
+  border-radius: 12px;
+}
+
+/* Aurora gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #6ee7f7 0%, #818cf8 50%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Status badge styles */
+.badge-queued    { background: oklch(30% 0.05 250 / 0.4); color: oklch(80% 0.1 250); border: 1px solid oklch(50% 0.1 250 / 0.3); }
+.badge-running   { background: oklch(35% 0.1 220 / 0.4); color: oklch(80% 0.18 220); border: 1px solid oklch(60% 0.18 220 / 0.3); }
+.badge-completed { background: oklch(25% 0.08 145 / 0.4); color: oklch(72% 0.18 145); border: 1px solid oklch(55% 0.16 145 / 0.3); }
+.badge-failed    { background: oklch(25% 0.1 25 / 0.4);  color: oklch(72% 0.2 25);  border: 1px solid oklch(55% 0.18 25 / 0.3); }
+.badge-dlq       { background: oklch(25% 0.12 0 / 0.4);  color: oklch(72% 0.22 0);  border: 1px solid oklch(55% 0.2 0 / 0.3); }
+.badge-scheduled { background: oklch(30% 0.08 70 / 0.4); color: oklch(78% 0.18 70); border: 1px solid oklch(55% 0.15 70 / 0.3); }
+.badge-cancelled { background: oklch(20% 0.02 255 / 0.4); color: oklch(55% 0.04 255); border: 1px solid oklch(40% 0.04 255 / 0.3); }
+.badge-claimed   { background: oklch(32% 0.08 200 / 0.4); color: oklch(78% 0.16 200); border: 1px solid oklch(55% 0.14 200 / 0.3); }
+
+/* Glow effect */
+.aurora-glow {
+  box-shadow: 0 0 30px oklch(55% 0.22 220 / 0.15), 0 0 60px oklch(55% 0.22 220 / 0.08);
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.live-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Table row hover */
+.table-row-hover:hover {
+  background: oklch(20% 0.03 255 / 0.6);
+  cursor: pointer;
+}
+
+/* Sidebar nav item */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: oklch(65% 0.04 255);
+  transition: all 0.15s ease;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+.nav-item:hover {
+  background: oklch(20% 0.03 255 / 0.8);
+  color: oklch(90% 0.02 255);
+}
+.nav-item.active {
+  background: oklch(22% 0.05 220 / 0.8);
+  color: oklch(80% 0.18 220);
+  border: 1px solid oklch(40% 0.12 220 / 0.4);
+}
+
+/* Metric card */
+.metric-card {
+  background: oklch(16% 0.025 255 / 0.9);
+  border: 1px solid var(--color-surface-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: border-color 0.2s ease;
+}
+.metric-card:hover {
+  border-color: oklch(40% 0.1 220 / 0.5);
+}

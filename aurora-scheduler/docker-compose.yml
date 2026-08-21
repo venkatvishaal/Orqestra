@@ -1,0 +1,100 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aurora_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aurora
+      POSTGRES_PASSWORD: aurora_secret
+      POSTGRES_DB: aurora_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aurora -d aurora_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aurora_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis_secret
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_secret', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aurora_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aurora.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    container_name: aurora_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://aurora:aurora_secret@postgres:5432/aurora_db
+      REDIS_URL: redis://:redis_secret@redis:6379
+      JWT_SECRET: super_secret_jwt_key_change_in_prod
+      JWT_REFRESH_SECRET: super_secret_refresh_key_change_in_prod
+      PORT: 3001
+      NODE_ENV: development
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: pnpm run start:dev
+
+  worker:
+    build:
+      context: ./apps/worker
+      dockerfile: Dockerfile.dev
+    container_name: aurora_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://aurora:aurora_secret@postgres:5432/aurora_db
+      REDIS_URL: redis://:redis_secret@redis:6379
+      API_BASE_URL: http://api:3001
+      WORKER_CONCURRENCY: 5
+      POLL_INTERVAL_MS: 500
+      HEARTBEAT_INTERVAL_MS: 5000
+      HEARTBEAT_TTL_MS: 15000
+      DRAIN_TIMEOUT_MS: 30000
+      NODE_ENV: development
+    volumes:
+      - ./apps/worker:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    command: pnpm run start:dev
+
+volumes:
+  postgres_data:
+  redis_data:
