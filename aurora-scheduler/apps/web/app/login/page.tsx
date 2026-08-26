@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { authApi } from "@/lib/api";
+import { authApi, orgsApi, projectsApi } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,6 +24,23 @@ export default function LoginPage() {
       localStorage.setItem("refresh_token", data.refreshToken);
       localStorage.setItem("user_id", data.user.id);
       localStorage.setItem("user_email", data.user.email);
+
+      // Automatically fetch and store default organization & project IDs
+      try {
+        const orgsRes = await orgsApi.list();
+        const org = orgsRes.data?.[0];
+        if (org) {
+          localStorage.setItem("org_id", org.id);
+          const projectsRes = await projectsApi.list(org.id);
+          const project = projectsRes.data?.[0];
+          if (project) {
+            localStorage.setItem("project_id", project.id);
+          }
+        }
+      } catch (fetchErr) {
+        console.error("Failed to pre-fetch organization or project details:", fetchErr);
+      }
+
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.response?.data?.message || "Authentication failed");
@@ -92,7 +109,7 @@ export default function LoginPage() {
               className="gradient-text"
               style={{ fontSize: 24, fontWeight: 700 }}
             >
-              Aurora Scheduler
+              Orqestra
             </span>
           </div>
           <p style={{ color: "oklch(55% 0.04 255)", fontSize: 14 }}>
@@ -278,7 +295,7 @@ export default function LoginPage() {
             Demo credentials
           </p>
           <code style={{ fontSize: 12, color: "oklch(72% 0.12 220)" }}>
-            demo@aurora.dev / demo12345
+            demo@orqestra.dev / demo12345
           </code>
         </div>
       </motion.div>

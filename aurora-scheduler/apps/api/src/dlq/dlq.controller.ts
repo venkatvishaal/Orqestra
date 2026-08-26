@@ -9,6 +9,8 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  ParseIntPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DlqService } from './dlq.service';
@@ -24,9 +26,9 @@ export class DlqController {
   @Get()
   @ApiOperation({ summary: 'List Dead Letter Queue entries' })
   findAll(
-    @Query('queueId') queueId?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('queueId', new DefaultValuePipe(undefined)) queueId: string | undefined,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
     return this.dlqService.findAll(queueId, page, limit);
   }

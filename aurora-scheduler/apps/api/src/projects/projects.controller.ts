@@ -14,12 +14,12 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class CreateProjectDto {
   @ApiProperty() @IsString() name: string;
-  @ApiProperty() @IsString() orgId: string;
+  @ApiProperty() @IsUUID() orgId: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
 }
 

@@ -11,7 +11,7 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const logger = app.get(Logger);
-  logger.log(`Aurora Worker started on ${os.hostname()} (PID: ${process.pid})`);
+  logger.log(`Orqestra Worker started on ${os.hostname()} (PID: ${process.pid})`);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

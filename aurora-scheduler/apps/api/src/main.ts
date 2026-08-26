@@ -34,7 +34,7 @@ async function bootstrap() {
 
   // Swagger docs
   const config = new DocumentBuilder()
-    .setTitle('Aurora Scheduler API')
+    .setTitle('Orqestra API')
     .setDescription(
       'A distributed job scheduling platform — REST API + WebSocket events',
     )
@@ -47,7 +47,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`Aurora API running on http://localhost:${port}`);
+  console.log(`Orqestra API running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/api/docs`);
 }
 

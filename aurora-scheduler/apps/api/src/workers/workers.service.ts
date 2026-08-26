@@ -5,7 +5,6 @@ import { Cron } from '@nestjs/schedule';
 import { Worker, WorkerStatus } from './entities/worker.entity';
 import { WorkerHeartbeat } from './entities/worker-heartbeat.entity';
 import { EventsGateway } from '../events/events.gateway';
-import { JobClaimService } from '../jobs/job-claim.service';
 
 const HEARTBEAT_TIMEOUT_MS = parseInt(process.env.HEARTBEAT_TTL_MS ?? '15000');
 
@@ -19,7 +18,6 @@ export class WorkersService {
     @InjectRepository(WorkerHeartbeat)
     private readonly heartbeatsRepo: Repository<WorkerHeartbeat>,
     private readonly eventsGateway: EventsGateway,
-    private readonly jobClaimService: JobClaimService,
   ) {}
 
   async register(data: {
@@ -121,18 +119,15 @@ export class WorkersService {
     // Mark as unhealthy
     await this.workersRepo.update(staleIds, { status: WorkerStatus.UNHEALTHY });
 
-    // Reclaim their jobs
-    const reclaimed = await this.jobClaimService.reclaimStaleJobs(staleIds);
+    // BullMQ handles orphaned job visibility via its own lock expiry mechanism.
+    // Workers that crashed mid-job will have their BullMQ lock expire and the
+    // job will be automatically re-queued by BullMQ's stalled-job checker.
 
     for (const worker of staleWorkers) {
       this.eventsGateway.emitWorkerEvent('worker.unhealthy', worker);
       this.logger.warn(
         `Worker ${worker.id} (${worker.hostname}) marked unhealthy — missed heartbeat`,
       );
-    }
-
-    if (reclaimed > 0) {
-      this.logger.warn(`Reclaimed ${reclaimed} orphaned jobs from stale workers`);
     }
   }
 

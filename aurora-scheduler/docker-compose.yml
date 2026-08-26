@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: orqestra_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orqestra
+      POSTGRES_PASSWORD: orqestra_pass
+      POSTGRES_DB: orqestra_db
+    ports:
+      - '5433:5432'   # host 5433 → container 5432 (avoids conflict with local Postgres)
+    volumes:
+      - orqestra_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U orqestra -d orqestra_db']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: orqestra_redis
+    restart: unless-stopped
+    ports:
+      - '6380:6379'   # host 6380 → container 6379 (avoids conflict with local Redis)
+    volumes:
+      - orqestra_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  orqestra_pg_data:
+  orqestra_redis_data:

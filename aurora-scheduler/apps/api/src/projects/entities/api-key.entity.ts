@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { Project } from './project.entity';
 
@@ -18,6 +19,16 @@ export class ApiKey {
 
   @Column({ name: 'key_hash' })
   keyHash: string;
+
+  /**
+   * First 8 characters of the raw key stored in plaintext.
+   * Used as a fast indexed lookup to find the single candidate row
+   * before the expensive bcrypt.compare() call.
+   * This reduces API key validation from O(n×bcrypt) to O(1×bcrypt).
+   */
+  @Index()
+  @Column({ name: 'key_prefix', type: 'varchar', length: 8, nullable: true })
+  keyPrefix: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   name?: string;

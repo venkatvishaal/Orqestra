@@ -1,5 +1,5 @@
 {
-  "name": "@aurora/worker",
+  "name": "@orqestra/worker",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -15,6 +15,7 @@
     "@nestjs/schedule": "^4.0.2",
     "@nestjs/typeorm": "^10.0.2",
     "axios": "^1.7.2",
+    "bullmq": "^6.2.0",
     "ioredis": "^5.4.1",
     "nestjs-pino": "^4.1.0",
     "os": "^0.1.2",

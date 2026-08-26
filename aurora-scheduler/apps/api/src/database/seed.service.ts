@@ -43,7 +43,7 @@ export class SeedService implements OnApplicationBootstrap {
     const passwordHash = await bcrypt.hash('demo12345', 12);
     const user = await this.usersRepo.save(
       this.usersRepo.create({
-        email: 'demo@aurora.dev',
+        email: 'demo@orqestra.dev',
         passwordHash,
       }),
     );
@@ -80,6 +80,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.apiKeysRepo.create({
         projectId: project.id,
         keyHash,
+        keyPrefix: 'ak_demo_',
         name: 'Demo API Key',
       }),
     );

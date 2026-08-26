@@ -45,4 +45,11 @@ export const databaseConfig = (
     configService.get('NODE_ENV') === 'production'
       ? { rejectUnauthorized: false }
       : false,
+  // Explicit connection pool tuning — defaults to pg's 10, which is too low under load
+  extra: {
+    max: parseInt(configService.get('DB_POOL_MAX') ?? '20'),
+    min: parseInt(configService.get('DB_POOL_MIN') ?? '2'),
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  },
 });

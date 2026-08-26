@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
-import { JobClaimService } from './job-claim.service';
 import { Job } from './entities/job.entity';
 import { JobExecution } from './entities/job-execution.entity';
 import { JobLog } from './entities/job-log.entity';
@@ -12,6 +11,7 @@ import { Queue } from '../queues/entities/queue.entity';
 import { RetryPolicy } from '../queues/entities/retry-policy.entity';
 import { DeadLetterEntry } from '../dlq/entities/dead-letter-entry.entity';
 import { EventsModule } from '../events/events.module';
+import { BullModule } from '../queues/bull.module';
 
 @Module({
   imports: [
@@ -26,9 +26,10 @@ import { EventsModule } from '../events/events.module';
       DeadLetterEntry,
     ]),
     EventsModule,
+    BullModule,
   ],
   controllers: [JobsController],
-  providers: [JobsService, JobClaimService],
-  exports: [JobsService, JobClaimService],
+  providers: [JobsService],
+  exports: [JobsService],
 })
 export class JobsModule {}

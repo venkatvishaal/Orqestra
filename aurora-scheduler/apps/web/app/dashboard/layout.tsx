@@ -104,7 +104,7 @@ export default function DashboardLayout({
               className="gradient-text"
               style={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap" }}
             >
-              Aurora
+              Orqestra
             </motion.span>
           )}
         </div>

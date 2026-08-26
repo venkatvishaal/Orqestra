@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -75,19 +75,41 @@ export class AuthService {
     if (parts.length < 3 || parts[0] !== 'ak') return null;
     const projectId = parts[1];
 
-    const keys = await this.apiKeysRepo.find({
-      where: { projectId, isRevoked: false },
+    const keyPrefix = rawKey.substring(0, 8);
+
+    // 1. Try the fast-path lookup using the prefix index
+    let candidate = await this.apiKeysRepo.findOne({
+      where: { projectId, keyPrefix, isRevoked: false },
     });
 
-    for (const key of keys) {
-      const match = await bcrypt.compare(rawKey, key.keyHash);
-      if (match) {
-        // Update last used
-        await this.apiKeysRepo.update(key.id, { lastUsedAt: new Date() });
-        return { projectId };
+    // 2. Fallback for legacy keys that were created before key_prefix was introduced
+    if (!candidate) {
+      const legacyKeys = await this.apiKeysRepo.find({
+        where: { projectId, keyPrefix: IsNull(), isRevoked: false },
+      });
+
+      for (const key of legacyKeys) {
+        const match = await bcrypt.compare(rawKey, key.keyHash);
+        if (match) {
+          // Backfill prefix so subsequent requests use the fast indexed path
+          await this.apiKeysRepo.update(key.id, { keyPrefix });
+          candidate = key;
+          break;
+        }
       }
     }
-    return null;
+
+    if (!candidate) return null;
+
+    // Fast-path candidate still needs its hash compared (if found by prefix)
+    if (candidate.keyPrefix === keyPrefix) {
+      const match = await bcrypt.compare(rawKey, candidate.keyHash);
+      if (!match) return null;
+    }
+
+    // Update last used timestamp asynchronously (fire-and-forget, non-critical)
+    this.apiKeysRepo.update(candidate.id, { lastUsedAt: new Date() }).catch(() => {});
+    return { projectId };
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -129,8 +151,9 @@ export class AuthService {
   ): Promise<{ id: string; key: string }> {
     const random = randomBytes(32).toString('hex');
     const rawKey = `ak_${projectId}_${random}`;
+    const keyPrefix = rawKey.substring(0, 8); // stored for fast O(1) lookup
     const keyHash = await bcrypt.hash(rawKey, SALT_ROUNDS);
-    const apiKey = this.apiKeysRepo.create({ projectId, keyHash, name });
+    const apiKey = this.apiKeysRepo.create({ projectId, keyHash, keyPrefix, name });
     const saved = await this.apiKeysRepo.save(apiKey);
     return { id: saved.id, key: rawKey };
   }

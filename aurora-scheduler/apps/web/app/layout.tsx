@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aurora Scheduler — Distributed Job Platform",
+  title: "Orqestra — Distributed Job Platform",
   description:
     "Real-time distributed job scheduling with atomic claiming, retry semantics, and dead-letter queue management.",
   keywords: ["job scheduler", "distributed systems", "background jobs", "queues"],

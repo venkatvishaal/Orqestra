@@ -15,7 +15,10 @@ import { DlqModule } from './dlq/dlq.module';
 import { EventsModule } from './events/events.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { RedisModule } from './redis/redis.module';
+import { BullModule } from './queues/bull.module';
 import { databaseConfig } from './database/database.config';
+
+// Seed service — only loaded outside production
 import { SeedService } from './database/seed.service';
 import { User } from './users/entities/user.entity';
 import { Organization } from './organizations/entities/organization.entity';
@@ -28,6 +31,8 @@ import { Job } from './jobs/entities/job.entity';
 import { DeadLetterEntry } from './dlq/entities/dead-letter-entry.entity';
 import { Worker } from './workers/entities/worker.entity';
 
+const isProd = process.env.NODE_ENV === 'production';
+
 @Module({
   imports: [
     // Config
@@ -36,11 +41,10 @@ import { Worker } from './workers/entities/worker.entity';
     // Logger
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? { target: 'pino-pretty', options: { colorize: true } }
-            : undefined,
+        level: isProd ? 'info' : 'debug',
+        transport: !isProd
+          ? { target: 'pino-pretty', options: { colorize: true } }
+          : undefined,
       },
     }),
 
@@ -59,6 +63,7 @@ import { Worker } from './workers/entities/worker.entity';
 
     // Feature modules
     RedisModule,
+    BullModule,
     AuthModule,
     UsersModule,
     OrganizationsModule,
@@ -70,20 +75,25 @@ import { Worker } from './workers/entities/worker.entity';
     EventsModule,
     SchedulerModule,
 
-    // Database entities for seeding
-    TypeOrmModule.forFeature([
-      User,
-      Organization,
-      OrganizationMember,
-      Project,
-      ApiKey,
-      Queue,
-      RetryPolicy,
-      Job,
-      DeadLetterEntry,
-      Worker,
-    ]),
+    // Seed entities — only registered outside production to avoid unnecessary repo overhead
+    ...(isProd
+      ? []
+      : [
+          TypeOrmModule.forFeature([
+            User,
+            Organization,
+            OrganizationMember,
+            Project,
+            ApiKey,
+            Queue,
+            RetryPolicy,
+            Job,
+            DeadLetterEntry,
+            Worker,
+          ]),
+        ]),
   ],
-  providers: [SeedService],
+  // SeedService only runs outside production
+  providers: isProd ? [] : [SeedService],
 })
 export class AppModule {}

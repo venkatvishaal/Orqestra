@@ -16,6 +16,19 @@ import { CreateQueueDto } from './dto/create-queue.dto';
 import { UpdateQueueDto } from './dto/update-queue.dto';
 import { REDIS_CLIENT } from '../redis/redis.module';
 
+export interface QueueStats {
+  queueId: string;
+  name: string;
+  isPaused: boolean;
+  depth: number;        // queued
+  inFlight: number;     // claimed + running
+  completed: number;
+  failed: number;
+  dlq: number;
+  successRate: number;  // 0-100
+  updatedAt: Date;
+}
+
 @Injectable()
 export class QueuesService {
   private readonly logger = new Logger(QueuesService.name);
@@ -110,26 +123,38 @@ export class QueuesService {
     return saved;
   }
 
-  async getStats(id: string): Promise<any> {
+  async getStats(id: string): Promise<QueueStats> {
     const cacheKey = `queue:stats:${id}`;
     const cached = await this.redis.get(cacheKey);
-    if (cached) return JSON.parse(cached);
+    if (cached) return JSON.parse(cached) as QueueStats;
 
     const queue = await this.findOne(id);
 
-    const [depth, claimed, running, completed, failed, dlq] = await Promise.all([
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.QUEUED } }),
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.CLAIMED } }),
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.RUNNING } }),
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.COMPLETED } }),
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.FAILED } }),
-      this.jobsRepo.count({ where: { queueId: id, status: JobStatus.DLQ } }),
-    ]);
+    // Single aggregation query instead of 6 separate COUNTs
+    const rows: Array<{ status: string; count: string }> = await this.jobsRepo
+      .createQueryBuilder('job')
+      .select('job.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .where('job.queueId = :id', { id })
+      .groupBy('job.status')
+      .getRawMany();
+
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.status] = parseInt(row.count, 10);
+    }
+
+    const depth = counts[JobStatus.QUEUED] ?? 0;
+    const claimed = counts[JobStatus.CLAIMED] ?? 0;
+    const running = counts[JobStatus.RUNNING] ?? 0;
+    const completed = counts[JobStatus.COMPLETED] ?? 0;
+    const failed = counts[JobStatus.FAILED] ?? 0;
+    const dlq = counts[JobStatus.DLQ] ?? 0;
 
     const total = completed + failed;
     const successRate = total > 0 ? Math.round((completed / total) * 100) : 100;
 
-    const stats = {
+    const stats: QueueStats = {
       queueId: id,
       name: queue.name,
       isPaused: queue.isPaused,

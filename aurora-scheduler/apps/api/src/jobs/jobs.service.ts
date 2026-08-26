@@ -4,11 +4,13 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, IsNull } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { Cron as CronJob } from 'croner';
+import Redis from 'ioredis';
 import { Job, JobStatus, JobType } from './entities/job.entity';
 import { JobExecution, ExecutionStatus } from './entities/job-execution.entity';
 import { JobLog } from './entities/job-log.entity';
@@ -17,8 +19,13 @@ import { BatchJob } from './entities/batch-job.entity';
 import { Queue } from '../queues/entities/queue.entity';
 import { DeadLetterEntry } from '../dlq/entities/dead-letter-entry.entity';
 import { EventsGateway } from '../events/events.gateway';
+import { BullQueueFactory } from '../queues/bull.module';
+import { REDIS_CLIENT } from '../redis/redis.module';
 import { CreateJobDto } from './dto/create-job.dto';
 import { ListJobsDto } from './dto/list-jobs.dto';
+
+/** Lock TTL (seconds) — slightly less than cron interval to guarantee release */
+const CRON_LOCK_TTL_SEC = 55;
 
 @Injectable()
 export class JobsService {
@@ -42,6 +49,9 @@ export class JobsService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly eventsGateway: EventsGateway,
+    private readonly bullFactory: BullQueueFactory,
+    @Inject(REDIS_CLIENT)
+    private readonly redis: Redis,
   ) {}
 
   async create(dto: CreateJobDto): Promise<Job | ScheduledJob | { batchId: string; jobs: Job[] }> {
@@ -52,17 +62,10 @@ export class JobsService {
     if (!queue) throw new NotFoundException(`Queue ${dto.queueId} not found`);
     if (queue.isPaused) throw new BadRequestException('Queue is paused');
 
-    // Handle batch jobs
-    if (dto.type === JobType.BATCH) {
-      return this.createBatch(dto, queue);
-    }
+    if (dto.type === JobType.BATCH) return this.createBatch(dto, queue);
+    if (dto.type === JobType.CRON) return this.createCronJob(dto, queue);
 
-    // Handle cron jobs
-    if (dto.type === JobType.CRON) {
-      return this.createCronJob(dto, queue);
-    }
-
-    // Check idempotency key
+    // Idempotency check
     if (dto.idempotencyKey) {
       const existing = await this.jobsRepo.findOne({
         where: { queueId: dto.queueId, idempotencyKey: dto.idempotencyKey },
@@ -88,6 +91,13 @@ export class JobsService {
     });
 
     const saved = await this.jobsRepo.save(job);
+
+    // Push immediately-runnable jobs to BullMQ (Redis hot queue).
+    // Delayed jobs are pushed with a BullMQ delay so they fire at the right time.
+    if (status === JobStatus.QUEUED || status === JobStatus.SCHEDULED) {
+      await this.enqueueToBull(queue.name, saved, dto.delayMs);
+    }
+
     this.eventsGateway.emitJobEvent('job.created', saved);
     this.logger.log(`Job created: ${saved.id} type=${saved.type} status=${saved.status}`);
     return saved;
@@ -137,7 +147,10 @@ export class JobsService {
   }
 
   async retry(id: string): Promise<Job> {
-    const job = await this.jobsRepo.findOne({ where: { id } });
+    const job = await this.jobsRepo.findOne({
+      where: { id },
+      relations: ['queue'],
+    });
     if (!job) throw new NotFoundException(`Job ${id} not found`);
 
     if (![JobStatus.FAILED, JobStatus.DLQ].includes(job.status)) {
@@ -146,7 +159,6 @@ export class JobsService {
 
     const originalStatus = job.status;
 
-    // Reset to queued with fresh attempt count
     job.status = JobStatus.QUEUED;
     job.attempts = 0;
     job.runAt = new Date();
@@ -155,9 +167,13 @@ export class JobsService {
 
     const saved = await this.jobsRepo.save(job);
 
-    // If it was in DLQ, update the entry
     if (originalStatus === JobStatus.DLQ) {
       await this.dlqRepo.update({ jobId: id }, { isRequeued: true, requeuedAt: new Date() });
+    }
+
+    // Re-push to BullMQ so the worker picks it up
+    if (job.queue?.name) {
+      await this.enqueueToBull(job.queue.name, saved);
     }
 
     this.eventsGateway.emitJobEvent('job.retried', saved);
@@ -176,7 +192,10 @@ export class JobsService {
     jobId: string,
     result: Record<string, any>,
     executionId: string,
+    startTime: number, // epoch ms — passed by the worker to compute accurate duration
   ): Promise<void> {
+    const durationMs = Date.now() - startTime;
+
     await this.dataSource.transaction(async (em) => {
       await em.update(Job, { id: jobId }, { status: JobStatus.COMPLETED });
       await em.update(
@@ -186,17 +205,14 @@ export class JobsService {
           status: ExecutionStatus.COMPLETED,
           result,
           finishedAt: new Date(),
-          durationMs: Date.now() - Date.now(), // placeholder
+          durationMs,
         },
       );
     });
 
-    const job = await this.jobsRepo.findOne({ where: { id: jobId } });
-    if (job) {
-      this.eventsGateway.emitJobEvent('job.completed', job);
-      // Update batch progress if applicable
-      if (job.batchId) await this.updateBatchProgress(job.batchId);
-    }
+    // Use what we already know — avoid an extra DB round-trip just to emit an event
+    const jobSnapshot = { id: jobId, status: JobStatus.COMPLETED } as Job;
+    this.eventsGateway.emitJobEvent('job.completed', jobSnapshot);
   }
 
   /** Called by worker to report job failure and handle retry/DLQ logic */
@@ -222,7 +238,6 @@ export class JobsService {
     });
 
     if (newAttempts >= maxAttempts) {
-      // Move to DLQ
       await this.dataSource.transaction(async (em) => {
         await em.update(Job, { id: jobId }, { status: JobStatus.DLQ, attempts: newAttempts });
         await em.save(DeadLetterEntry, {
@@ -235,7 +250,7 @@ export class JobsService {
       });
       this.eventsGateway.emitJobEvent('job.dlq', job);
     } else {
-      // Schedule retry with backoff
+      // BullMQ handles retry scheduling via its own backoff — we just record the attempt count
       const retryPolicy = job.queue?.retryPolicy;
       const delayMs = retryPolicy?.calculateDelay(newAttempts) ?? 2000 * Math.pow(2, newAttempts - 1);
       const runAt = new Date(Date.now() + delayMs);
@@ -253,6 +268,73 @@ export class JobsService {
     if (job.batchId) await this.updateBatchProgress(job.batchId);
   }
 
+  // ---------------------------------------------------------------------------
+  // Cron Materializer
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Runs every minute to spawn Postgres job records for due cron schedules,
+   * then pushes them to BullMQ.
+   *
+   * Uses a Redis distributed lock (SET NX EX) so that only ONE API instance
+   * materializes jobs when multiple replicas are running simultaneously.
+   */
+  @Cron('* * * * *')
+  async materializeCronJobs() {
+    // Acquire a 55-second lock — prevents duplicate materialisation in multi-instance deploys
+    const lockKey = 'cron:lock:materializer';
+    const acquired = await this.redis.set(lockKey, '1', 'EX', CRON_LOCK_TTL_SEC, 'NX');
+    if (!acquired) {
+      this.logger.debug('Cron materializer lock held by another instance — skipping');
+      return;
+    }
+
+    const due = await this.scheduledJobsRepo
+      .createQueryBuilder('sj')
+      .where('sj.nextRunAt <= NOW()')
+      .andWhere('sj.isActive = true')
+      .getMany();
+
+    for (const scheduledJob of due) {
+      try {
+        const job = await this.jobsRepo.save(
+          this.jobsRepo.create({
+            queueId: scheduledJob.queueId,
+            type: JobType.SCHEDULED,
+            status: JobStatus.QUEUED,
+            payload: scheduledJob.jobTemplate.payload,
+            handlerUrl: scheduledJob.jobTemplate.handlerUrl,
+            priority: scheduledJob.jobTemplate.priority ?? 0,
+            maxAttempts: scheduledJob.jobTemplate.maxAttempts ?? 3,
+            runAt: new Date(),
+          }),
+        );
+
+        // Look up the queue name for BullMQ
+        const queue = await this.queuesRepo.findOne({ where: { id: scheduledJob.queueId } });
+        if (queue) {
+          await this.enqueueToBull(queue.name, job);
+        }
+
+        const cron = new CronJob(scheduledJob.cronExpression);
+        const nextRun = cron.nextRun();
+        await this.scheduledJobsRepo.update(scheduledJob.id, {
+          nextRunAt: nextRun ?? new Date(Date.now() + 60000),
+          lastMaterializedJobId: job.id,
+        });
+
+        this.eventsGateway.emitJobEvent('job.created', job);
+        this.logger.log(`Materialized cron job ${job.id} from schedule ${scheduledJob.id}`);
+      } catch (err) {
+        this.logger.error(`Failed to materialize cron job ${scheduledJob.id}:`, err);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
   private computeRunAt(dto: CreateJobDto): Date {
     if (dto.type === JobType.IMMEDIATE) return new Date();
     if (dto.type === JobType.DELAYED && dto.delayMs) {
@@ -260,6 +342,33 @@ export class JobsService {
     }
     if (dto.runAt) return new Date(dto.runAt);
     return new Date();
+  }
+
+  /**
+   * Push a saved Job to BullMQ.
+   * BullMQ handles priority and delay natively.
+   * The job payload stored in Redis is intentionally minimal — the worker
+   * reads the full job from Postgres using the jobId.
+   */
+  private async enqueueToBull(queueName: string, job: Job, delayMs?: number): Promise<void> {
+    try {
+      const bullQueue = this.bullFactory.getOrCreate(queueName);
+      await bullQueue.add(
+        job.type,
+        { jobId: job.id },          // minimal payload — worker fetches the rest from Postgres
+        {
+          jobId: job.id,            // deduplicate by Postgres ID
+          priority: job.priority,
+          delay: delayMs ?? 0,
+          attempts: job.maxAttempts ?? 3,
+          backoff: { type: 'exponential', delay: 2000 },
+        },
+      );
+      this.logger.debug(`Job ${job.id} enqueued to BullMQ queue "${queueName}"`);
+    } catch (err) {
+      // Non-fatal — job is safe in Postgres. Log and continue.
+      this.logger.error(`Failed to enqueue job ${job.id} to BullMQ:`, err);
+    }
   }
 
   private async createBatch(dto: CreateJobDto, queue: Queue) {
@@ -277,7 +386,7 @@ export class JobsService {
     );
 
     const maxAttempts = dto.maxAttempts ?? queue.retryPolicy?.maxAttempts ?? 3;
-    const jobs = dto.batchItems.map((item) =>
+    const jobEntities = dto.batchItems.map((item) =>
       this.jobsRepo.create({
         queueId: dto.queueId,
         type: JobType.BATCH,
@@ -291,7 +400,11 @@ export class JobsService {
       }),
     );
 
-    const saved = await this.jobsRepo.save(jobs);
+    const saved = await this.jobsRepo.save(jobEntities);
+
+    // Push all batch jobs to BullMQ
+    await Promise.all(saved.map((j) => this.enqueueToBull(queue.name, j)));
+
     return { batchId: batch.id, jobs: saved };
   }
 
@@ -299,7 +412,6 @@ export class JobsService {
     if (!dto.cronExpression) {
       throw new BadRequestException('Cron jobs require a cronExpression');
     }
-    // Validate cron expression
     try {
       const cron = new CronJob(dto.cronExpression);
       const nextRun = cron.nextRun();
@@ -324,53 +436,13 @@ export class JobsService {
     }
   }
 
-  /** Cron materializer — runs every minute to spawn due cron jobs */
-  @Cron('* * * * *')
-  async materializeCronJobs() {
-    const due = await this.scheduledJobsRepo
-      .createQueryBuilder('sj')
-      .where('sj.nextRunAt <= NOW()')
-      .andWhere('sj.isActive = true')
-      .getMany();
-
-    for (const scheduledJob of due) {
-      try {
-        const job = await this.jobsRepo.save(
-          this.jobsRepo.create({
-            queueId: scheduledJob.queueId,
-            type: JobType.SCHEDULED,
-            status: JobStatus.QUEUED,
-            payload: scheduledJob.jobTemplate.payload,
-            handlerUrl: scheduledJob.jobTemplate.handlerUrl,
-            priority: scheduledJob.jobTemplate.priority ?? 0,
-            maxAttempts: scheduledJob.jobTemplate.maxAttempts ?? 3,
-            runAt: new Date(),
-          }),
-        );
-
-        // Compute next run
-        const cron = new CronJob(scheduledJob.cronExpression);
-        const nextRun = cron.nextRun();
-        await this.scheduledJobsRepo.update(scheduledJob.id, {
-          nextRunAt: nextRun ?? new Date(Date.now() + 60000),
-          lastMaterializedJobId: job.id,
-        });
-
-        this.eventsGateway.emitJobEvent('job.created', job);
-        this.logger.log(`Materialized cron job ${job.id} from schedule ${scheduledJob.id}`);
-      } catch (err) {
-        this.logger.error(`Failed to materialize cron job ${scheduledJob.id}:`, err);
-      }
-    }
-  }
-
   private async updateBatchProgress(batchId: string) {
     const counts = await this.jobsRepo
       .createQueryBuilder('job')
       .select([
-        'COUNT(*) FILTER (WHERE job.status = \'completed\') as completed',
-        'COUNT(*) FILTER (WHERE job.status IN (\'failed\', \'dlq\')) as failed',
-        'COUNT(*) FILTER (WHERE job.status IN (\'queued\', \'claimed\', \'running\', \'scheduled\')) as pending',
+        "COUNT(*) FILTER (WHERE job.status = 'completed') as completed",
+        "COUNT(*) FILTER (WHERE job.status IN ('failed', 'dlq')) as failed",
+        "COUNT(*) FILTER (WHERE job.status IN ('queued', 'claimed', 'running', 'scheduled')) as pending",
       ])
       .where('job.batchId = :batchId', { batchId })
       .getRawOne();
