@@ -1,4 +1,4 @@
-# Orqestra ⚡
+# Orqestra
 
 A robust, production-inspired distributed job scheduling platform capable of reliably executing asynchronous background jobs across multiple workers.
 
