@@ -1,5 +1,5 @@
-﻿
-# Orqestra â€” Codebase Navigation Guide
+
+# Orqestra — Codebase Navigation Guide
 
 > **Last updated**: After full optimization refactor (BullMQ migration, auth hardening, reliability fixes).
 
@@ -8,13 +8,13 @@
 ## Project Structure
 
 ```
-Orqestra-scheduler/
-â”œâ”€â”€ apps/
-â”‚   â”œâ”€â”€ api/          NestJS REST + WebSocket API
-â”‚   â”œâ”€â”€ worker/       NestJS job executor
-â”‚   â””â”€â”€ web/          Next.js dashboard
-â”œâ”€â”€ pnpm-workspace.yaml
-â””â”€â”€ GUIDE.md          â† You are here
+Orqestra/
+├── apps/
+│   ├── api/          NestJS REST + WebSocket API
+│   ├── worker/       NestJS job executor
+│   └── web/          Next.js dashboard
+├── pnpm-workspace.yaml
+└── GUIDE.md          ← You are here
 ```
 
 ---
@@ -23,17 +23,17 @@ Orqestra-scheduler/
 
 ```
 POST /jobs
-    â”‚
-    â”œâ”€â–º Postgres (jobs table)   â€” persistent audit record
-    â”‚
-    â””â”€â–º Redis / BullMQ queue    â€” hot execution queue
-              â”‚
-              â–¼
+    │
+    ├──► Postgres (jobs table)   — persistent audit record
+    │
+    └──► Redis / BullMQ queue    — hot execution queue
+              │
+              ▼
         Worker (BullMQ Worker)
-              â”‚
-              â”œâ”€â–º Postgres job_executions   â€” execution record + timing
-              â”œâ”€â–º Postgres job_logs         â€” append-only execution log
-              â””â”€â–º Postgres jobs.status      â€” RUNNING â†’ COMPLETED/FAILED/DLQ
+              │
+              ├──► Postgres job_executions   — execution record + timing
+              ├──► Postgres job_logs         — append-only execution log
+              └──► Postgres jobs.status      — RUNNING → COMPLETED/FAILED/DLQ
 ```
 
 Postgres is the **source of truth** for history and dashboards.  
@@ -44,8 +44,8 @@ Redis/BullMQ is the **source of truth** for what executes next.
 ## App 1: API (`apps/api/`)
 
 ### Entry Point
-- [`src/main.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/main.ts) â€” bootstraps NestJS, Swagger at `/api/docs`
-- [`src/app.module.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/app.module.ts) â€” root module; note `isProd` guard on SeedService
+- [`src/main.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/main.ts) — bootstraps NestJS, Swagger at `/api/docs`
+- [`src/app.module.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/app.module.ts) — root module; note `isProd` guard on SeedService
 
 ### Auth (`src/auth/`)
 | File | Purpose |
@@ -53,15 +53,15 @@ Redis/BullMQ is the **source of truth** for what executes next.
 | [`auth.service.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/auth/auth.service.ts) | Register, login, refresh, logout, API key generation & validation |
 | [`auth.controller.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/auth/auth.controller.ts) | `POST /auth/register`, `/login`, `/refresh`, `/logout` |
 | [`strategies/jwt.strategy.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/auth/strategies) | Validates `Authorization: Bearer <token>` |
-| [`strategies/api-key.strategy.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/auth/strategies) | Validates `x-api-key` header using `keyPrefix` â†’ O(1) bcrypt lookup |
+| [`strategies/api-key.strategy.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/auth/strategies) | Validates `x-api-key` header using `keyPrefix` → O(1) bcrypt lookup |
 
-> **API Key validation**: Keys are stored as `bcrypt(rawKey)` + `keyPrefix` (first 8 chars, plaintext, indexed). Validation does a single `WHERE keyPrefix = $1` before bcrypt â€” eliminates O(n) loop.
+> **API Key validation**: Keys are stored as `bcrypt(rawKey)` + `keyPrefix` (first 8 chars, plaintext, indexed). Validation does a single `WHERE keyPrefix = $1` before bcrypt — eliminates O(n) loop.
 
 ### Queues (`src/queues/`)
 | File | Purpose |
 |---|---|
 | [`queues.service.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/queues/queues.service.ts) | CRUD + pause/resume + `getStats()` (single GROUP BY query, Redis-cached 5s) |
-| [`bull.module.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/queues/bull.module.ts) | `BullQueueFactory` â€” lazily creates one BullMQ `Queue` per Orqestra queue |
+| [`bull.module.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/queues/bull.module.ts) | `BullQueueFactory` — lazily creates one BullMQ `Queue` per Orqestra queue |
 | [`entities/queue.entity.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/queues/entities) | Queue entity with `concurrencyLimit`, `rateLimitPerSec`, `isPaused` |
 | [`entities/retry-policy.entity.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/queues/entities) | Retry strategy (EXPONENTIAL/LINEAR) with `calculateDelay()` method |
 
@@ -78,7 +78,7 @@ Redis/BullMQ is the **source of truth** for what executes next.
 
 > **Cron materializer**: Runs every minute via `@Cron('* * * * *')`. Uses a Redis `SET NX EX 55` distributed lock so only one API instance materializes when multiple replicas run.
 
-> **BullMQ integration**: `create()` â†’ saves to Postgres â†’ calls `enqueueToBull()`. If Redis is down, the job is safe in Postgres (fail-safe logging, non-fatal).
+> **BullMQ integration**: `create()` → saves to Postgres → calls `enqueueToBull()`. If Redis is down, the job is safe in Postgres (fail-safe logging, non-fatal).
 
 ### Workers (`src/workers/`)
 | File | Purpose |
@@ -95,7 +95,7 @@ Redis/BullMQ is the **source of truth** for what executes next.
 ### Events (`src/events/`)
 | File | Purpose |
 |---|---|
-| [`events.gateway.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/events/events.gateway.ts) | Socket.IO WebSocket gateway â€” clients subscribe to project rooms |
+| [`events.gateway.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/api/src/events/events.gateway.ts) | Socket.IO WebSocket gateway — clients subscribe to project rooms |
 
 ### Infrastructure
 | File | Purpose |
@@ -115,7 +115,7 @@ Redis/BullMQ is the **source of truth** for what executes next.
 ### Modules
 | File | Purpose |
 |---|---|
-| [`poller/poller.service.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/worker/src/poller/poller.service.ts) | **Core executor** â€” BullMQ Workers per queue, executes jobs, writes results to Postgres |
+| [`poller/poller.service.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/worker/src/poller/poller.service.ts) | **Core executor** — BullMQ Workers per queue, executes jobs, writes results to Postgres |
 | [`heartbeat/heartbeat.service.ts`](file:///c:/TSVV/Codity.Ai/Orqestra-scheduler/apps/worker/src/heartbeat/heartbeat.service.ts) | Sends heartbeat to Redis + Postgres every 5s |
 
 > **No more raw SQL**: `SELECT FOR UPDATE SKIP LOCKED` is completely removed. BullMQ uses Redis `LMOVE` + a lock key for atomic claiming.
@@ -147,10 +147,10 @@ WebSocket connection at `ws://api/events` for live updates.
 ### API (`apps/api/.env`)
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | â€” | Postgres connection string |
-| `REDIS_URL` | â€” | Redis/ioredis connection string (supports `rediss://` for TLS) |
-| `JWT_SECRET` | â€” | Access token signing key |
-| `JWT_REFRESH_SECRET` | â€” | Refresh token signing key |
+| `DATABASE_URL` | — | Postgres connection string |
+| `REDIS_URL` | — | Redis/ioredis connection string (supports `rediss://` for TLS) |
+| `JWT_SECRET` | — | Access token signing key |
+| `JWT_REFRESH_SECRET` | — | Refresh token signing key |
 | `PORT` | `3001` | API HTTP port |
 | `NODE_ENV` | `development` | Controls sync, logging, seed |
 | `DB_POOL_MAX` | `20` | Max Postgres connections |
@@ -160,8 +160,8 @@ WebSocket connection at `ws://api/events` for live updates.
 ### Worker (`apps/worker/.env`)
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | â€” | Same Postgres DB as API |
-| `REDIS_URL` | â€” | Same Redis as API (BullMQ queues live here) |
+| `DATABASE_URL` | — | Same Postgres DB as API |
+| `REDIS_URL` | — | Same Redis as API (BullMQ queues live here) |
 | `WORKER_CONCURRENCY` | `5` | Max simultaneous jobs |
 | `HEARTBEAT_INTERVAL_MS` | `5000` | How often worker pings |
 | `HEARTBEAT_TTL_MS` | `15000` | Missed heartbeat threshold |
@@ -173,23 +173,23 @@ WebSocket connection at `ws://api/events` for live updates.
 
 ```
 create()
-  â”‚
-  â–¼
-QUEUED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º SCHEDULED (delayed/cron)
-  â”‚                                              â”‚
-  â”‚  BullMQ Worker claims                        â”‚ run_at reached
-  â–¼                                              â–¼
-RUNNING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ RUNNING
-  â”‚
-  â”œâ”€â”€ success â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º COMPLETED
-  â”‚
-  â””â”€â”€ failure
-        â”‚
-        â”œâ”€â”€ attempts < maxAttempts â”€â”€â”€â”€â”€ SCHEDULED (BullMQ backoff retry)
-        â”‚
-        â””â”€â”€ attempts >= maxAttempts â”€â”€â–º DLQ
-                                          â”‚
-                                    requeue() â”€â”€â–º QUEUED (BullMQ re-push)
+  │
+  ▼
+QUEUED ──────────────────────────────────► SCHEDULED (delayed/cron)
+  │                                              │
+  │  BullMQ Worker claims                        │ run_at reached
+  ▼                                              ▼
+RUNNING ──────────────────────────────── RUNNING
+  │
+  ├── success ──────────────────────────► COMPLETED
+  │
+  └── failure
+        │
+        ├── attempts < maxAttempts ───── SCHEDULED (BullMQ backoff retry)
+        │
+        └── attempts >= maxAttempts ──► DLQ
+                                          │
+                                    requeue() ──► QUEUED (BullMQ re-push)
 ```
 
 ---
@@ -200,11 +200,11 @@ RUNNING â”€â”€â”€â”€â”€â”€â”€â”€â”€
 |---|---|
 | **BullMQ over raw SQL** | Redis `LMOVE` + lock is simpler and more scalable than `FOR UPDATE SKIP LOCKED`. No custom SQL needed. |
 | **Postgres as audit store** | All history, logs, and stats live in Postgres. Redis is ephemeral hot-queue only. |
-| **`keyPrefix` on ApiKey** | Eliminates O(nÃ—bcrypt) API key validation â€” single indexed lookup before bcrypt. |
+| **`keyPrefix` on ApiKey** | Eliminates O(n×bcrypt) API key validation — single indexed lookup before bcrypt. |
 | **Redis lock on cron materializer** | `SET NX EX 55` prevents duplicate job spawn when multiple API replicas run. |
 | **SeedService guarded by `isProd`** | Avoids registering 10 unnecessary repos in production. |
-| **DB pool via env vars** | `DB_POOL_MAX`/`DB_POOL_MIN` â€” tunable without code changes. |
-| **Cross-app entity imports** | Worker still imports from `../../../api/src/`. Extracting to `packages/db` is tracked as tech debt but not yet done â€” it requires build pipeline changes. |
+| **DB pool via env vars** | `DB_POOL_MAX`/`DB_POOL_MIN` — tunable without code changes. |
+| **Cross-app entity imports** | Worker still imports from `../../../api/src/`. Extracting to `packages/db` is tracked as tech debt but not yet done — it requires build pipeline changes. |
 
 ---
 
@@ -214,13 +214,13 @@ RUNNING â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # From Orqestra-scheduler/
 pnpm install
 
-# Terminal 1 â€” API
+# Terminal 1 — API
 cd apps/api && pnpm dev
 
-# Terminal 2 â€” Worker
+# Terminal 2 — Worker
 cd apps/worker && pnpm dev
 
-# Terminal 3 â€” Web
+# Terminal 3 — Web
 cd apps/web && pnpm dev
 ```
 
