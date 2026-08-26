@@ -821,7 +821,7 @@ This starts all three services in parallel:
 ### Demo Credentials
 
 ```
-Email:    demo@aurora.dev
+Email:    demo@orqestra.dev
 Password: demo12345
 ```
 
