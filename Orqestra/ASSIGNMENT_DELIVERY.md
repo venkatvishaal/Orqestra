@@ -8,14 +8,14 @@
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)
-2. [System Architecture](#2-system-architecture) *(20 marks)*
-3. [Database Design](#3-database-design) *(20 marks)*
-4. [Backend Engineering](#4-backend-engineering) *(20 marks)*
-5. [Reliability & Concurrency](#5-reliability--concurrency) *(15 marks)*
-6. [Frontend & UX](#6-frontend--ux) *(10 marks)*
-7. [API Reference](#7-api-reference) *(5 marks)*
-8. [Design Decisions & Trade-offs](#8-design-decisions--trade-offs) *(5 marks)*
-9. [Testing](#9-testing) *(5 marks)*
+2. [System Architecture](#2-system-architecture)
+3. [Database Design](#3-database-design)
+4. [Backend Engineering](#4-backend-engineering)
+5. [Reliability & Concurrency](#5-reliability--concurrency)
+6. [Frontend & UX](#6-frontend--ux)
+7. [API Reference](#7-api-reference)
+8. [Design Decisions & Trade-offs](#8-design-decisions--trade-offs)
+9. [Testing](#9-testing)
 10. [Setup & Installation](#10-setup--installation)
 11. [Bonus Features Implemented](#11-bonus-features-implemented)
 
@@ -60,7 +60,6 @@ orqestra/
 
 ## 2. System Architecture
 
-**Score Target: 20/20**
 
 ### 2.1 High-Level Architecture
 
@@ -128,7 +127,6 @@ flowchart TD
 
 ## 3. Database Design
 
-**Score Target: 20/20**
 
 ### 3.1 Entity Relationship Diagram
 
@@ -338,7 +336,6 @@ The `RetryPolicy.calculateDelay()` method in [`retry-policy.entity.ts`](file:///
 
 ## 4. Backend Engineering
 
-**Score Target: 20/20**
 
 ### 4.1 Authentication — Dual Strategy
 
@@ -394,7 +391,6 @@ This gives complete observability: how many attempts, which worker ran it, how l
 
 ## 5. Reliability & Concurrency
 
-**Score Target: 15/15**
 
 ### 5.1 Atomic Job Claiming — No Duplicate Execution
 
@@ -519,7 +515,6 @@ If a client retries a timed-out HTTP request, the second `POST /api/jobs` call r
 
 ## 6. Frontend & UX
 
-**Score Target: 10/10**
 
 The frontend is a **Next.js 16 App Router** application using React 19, Framer Motion for animations, and Recharts for data visualization.
 
@@ -558,7 +553,6 @@ The dashboard reacts to these events without polling, keeping the UI perfectly s
 
 ## 7. API Reference
 
-**Score Target: 5/5**
 
 > Full interactive documentation is available at **`http://localhost:3001/api/docs`** (Swagger UI).
 
@@ -664,7 +658,6 @@ Authorization: Bearer <token>
 
 ## 8. Design Decisions & Trade-offs
 
-**Score Target: 5/5**
 
 ### Decision 1: BullMQ + Redis for Job Claiming vs. PostgreSQL SKIP LOCKED
 
@@ -720,7 +713,6 @@ Authorization: Bearer <token>
 
 ## 9. Testing
 
-**Score Target: 5/5**
 
 ### 9.1 Test Coverage
 
